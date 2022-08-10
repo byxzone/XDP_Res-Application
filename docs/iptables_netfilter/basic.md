@@ -81,6 +81,12 @@ iptables 使用表来组织规则，根据用来做什么类型的判断标准�
 
 链使管理员可以控制在包的传输路径上哪个点应用策略。因为每个表有多个链，因此一个表可以在处理过程中的多 个地方施加影响。特定类型的规则只在协议栈的特定点有意义，因此并不是每个表都 会在内核的每个 hook 注册链。
 
+<img src="./images/arch.png">
+
+<img src="./images/overview.png">
+
 Ref
 
 https://arthurchiao.art/blog/deep-dive-into-iptables-and-netfilter-arch-zh/
+
+https://mp.weixin.qq.com/s/ZyZ_VpsewX5b2E-fwtGgsg
