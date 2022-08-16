@@ -27,26 +27,53 @@ static int match_rule(struct metainfo *info){
    int *daddr_bit = daddr_map.lookup(&info->daddr);
    int *sport_bit = sport_map.lookup(&info->sport);
    int *dport_bit = dport_map.lookup(&info->dport);
-   int prio_rule = 0;
-   if(ipproto_bit != NULL)
-      result_bit = result_bit & *ipproto_bit;
-   if(saddr_bit != NULL)
-      result_bit = result_bit & *saddr_bit;
-   if(daddr_bit != NULL)
-      result_bit = result_bit & *daddr_bit;   
-   if(sport_bit != NULL)
-      result_bit = result_bit & *sport_bit;
-   if(dport_bit != NULL)
-      result_bit = result_bit & *dport_bit;
-   if(result_bit == 0)
-      return XDP_PASS;  
-   #pragma unroll
-   for(int i=32;i--;i>0){
-      if(((result_bit >> 1) & 1) == 1){
-         prio_rule = i;
+   if(ipproto_bit != NULL){
+      if(*ipproto_bit != 0){
+         if(result_bit == 0){
+            result_bit = *ipproto_bit;
+         }
+         else
+            result_bit = result_bit & *ipproto_bit;
       }
    }
-   int *action = action_map.lookup(result_bit);
+   if(saddr_bit != NULL){
+      if(*saddr_bit != 0){
+         if(result_bit == 0)
+            result_bit = *saddr_bit;
+         else
+            result_bit = result_bit & *saddr_bit;
+      }
+   }
+   if(daddr_bit != NULL){ 
+      if(*daddr_bit != 0){     
+         if(result_bit == 0)
+            result_bit = *daddr_bit;
+         else
+            result_bit = result_bit & *daddr_bit;
+      }
+   }
+   if(sport_bit != NULL){
+      if(*sport_bit != 0){
+         if(result_bit == 0)
+            result_bit = *sport_bit;
+         else
+            result_bit = result_bit & *sport_bit;
+      }
+   }
+   if(dport_bit != NULL){
+      if(*dport_bit != 0){
+         if(result_bit == 0)
+            result_bit = *dport_bit;
+         else
+            result_bit = result_bit & *dport_bit;
+      }
+   }
+   //if(info->ipproto == IPPROTO_ICMP)
+   //   bpf_trace_printk("ipproto:%d,result_bit:%d",info->ipproto,result_bit);
+   if(result_bit == 0)
+      return XDP_PASS;
+   result_bit &= -result_bit; //get the prio rule
+   int *action = action_map.lookup(&result_bit);
       if(action != NULL)
          return *action;
 
@@ -63,13 +90,15 @@ int xdp_filter(struct xdp_md *ctx) {
    struct metainfo info;
 
    //以太网头部
-   struct ethhdr  *eth = data;
+   struct ethhdr *eth = (struct ethhdr *)data;
    //ip头部
    struct iphdr *ip;
-   struct tcphdr *tcp;
-   struct udphdr *udp;
    //以太网头部偏移量
-   offset = sizeof(*eth);
+   offset = sizeof(struct ethhdr);
+   //异常数据包，丢弃
+   if(data + offset > data_end){
+    return XDP_DROP;
+   }
    ip = data + offset;
    offset += sizeof(struct iphdr);
    //异常数据包，丢弃
@@ -81,8 +110,9 @@ int xdp_filter(struct xdp_md *ctx) {
    info.saddr = ip->saddr;
    info.daddr = ip->daddr;
    if(info.ipproto == IPPROTO_TCP){
-      tcp = data + offset;
-      if(tcp + 1 > data_end)
+      struct tcphdr *tcp = data + offset;
+      offset += sizeof(struct tcphdr);
+      if(data + offset > data_end)
          return XDP_DROP;
       //从tcp头部获取信息
       info.sport = tcp->source;
@@ -90,8 +120,9 @@ int xdp_filter(struct xdp_md *ctx) {
       return match_rule(&info);
    }
    else if(info.ipproto == IPPROTO_UDP){
-      udp = data + offset;
-      if(udp + 1 > data_end)
+      struct udphdr *udp = data + offset;
+      offset += sizeof(struct udphdr);
+      if(data + offset > data_end)
          return XDP_DROP;
       //从udp头部获取信息
       info.sport = udp->source;
@@ -99,13 +130,9 @@ int xdp_filter(struct xdp_md *ctx) {
       return match_rule(&info);
    }
    else{
-      int *ipproto_bit = ipproto_map.lookup(&info.ipproto);
-      if(ipproto_bit != NULL){
-         int *action = action_map.lookup(*ipproto_bit);
-         if(action != NULL)
-            return *action;
-      }
-
+      info.sport = 0;
+      info.dport = 0;
+      return match_rule(&info);
    }
    return XDP_PASS;
 }
