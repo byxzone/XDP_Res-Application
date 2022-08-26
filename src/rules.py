@@ -3,7 +3,7 @@ from socket import htons,htonl
 rules_raw = []
 
 ipproto_id = {'ICMP':1,'IGMP':2,'TCP':6,'UDP':17,0:0}
-action_id = {'DROP':1,0:0}
+action_id = {'DROP':1,'REDIRECT':4,0:0}
 
 '''
 0-ipproto
@@ -15,7 +15,7 @@ action_id = {'DROP':1,0:0}
 '''
 
 rules_raw.append(['ICMP',0,0,0,0,'DROP'])
-rules_raw.append(['TCP',0,0,0,22,'DROP'])
+rules_raw.append(['TCP',0,0,0,8888,'REDIRECT'])
 
 def rule_pretreat(rules_raw):
     rules = []

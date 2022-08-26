@@ -53,9 +53,10 @@ dport_map_values = (b['dport_map'].Leaf * 1024)()
 action_map_keys = (b['action_map'].Key * 1024)()
 action_map_values = (b['action_map'].Leaf * 1024)()
 
+
 rules_to_map()
 
-b.attach_xdp(dev="eth0", fn=b.load_func("xdp_filter", BPF.XDP),flags=BPF.XDP_FLAGS_SKB_MODE)
+b.attach_xdp(dev="lo", fn=b.load_func("xdp_filter", BPF.XDP),flags=BPF.XDP_FLAGS_SKB_MODE)
 print("xdp attached")
 print(b['ipproto_map'].items())
 print(b['action_map'].items())
@@ -68,4 +69,4 @@ while 1:
         break
 
 
-b.remove_xdp("eth0", BPF.XDP_FLAGS_SKB_MODE)
+b.remove_xdp("lo", BPF.XDP_FLAGS_SKB_MODE)
