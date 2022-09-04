@@ -23,10 +23,12 @@ struct metainfo{
 
 #define MAX_TCP_LENGTH 1480
 
+
 static __always_inline __u16 csum_fold_helper(__u32 csum)
 {
 	return ~((csum & 0xffff) + (csum >> 16));
 }
+
 
 static __always_inline void ipv4_csum(void *data_start, int data_size,
 				      __u32 *csum)
@@ -35,20 +37,21 @@ static __always_inline void ipv4_csum(void *data_start, int data_size,
 	*csum = csum_fold_helper(*csum);
 }
 
-__attribute__((__always_inline__))
-static inline void ipv4_l4_csum(void *data_start, __u32 data_size,
+
+
+static __always_inline void ipv4_l4_csum(void *data_start, __u32 data_size,
                                 __u64 *csum, struct iphdr *iph,
 								void *data_end) {
 	__u32 tmp = 0;
 	*csum = bpf_csum_diff(0, 0, &iph->saddr, sizeof(__be32), *csum);
 	*csum = bpf_csum_diff(0, 0, &iph->daddr, sizeof(__be32), *csum);
-	// __builtin_bswap32 equals to htonl()
-	tmp = __builtin_bswap32((__u32)(iph->protocol));
-	*csum = bpf_csum_diff(0, 0, &tmp, sizeof(__u32), *csum);
-	tmp = __builtin_bswap32((__u32)(data_size));
-	*csum = bpf_csum_diff(0, 0, &tmp, sizeof(__u32), *csum);	
-	// *csum = bpf_csum_diff(0, 0, data_start, data_size, *csum);	
 
+	tmp = bpf_htonl((__u32)(iph->protocol));
+	*csum = bpf_csum_diff(0, 0, &tmp, sizeof(__u32), *csum);
+	tmp = bpf_htonl((__u32)(data_size));
+	*csum = bpf_csum_diff(0, 0, &tmp, sizeof(__u32), *csum);	
+
+   
 	// Compute checksum from scratch by a bounded loop
 	__u16 *buf = data_start;
 	for (int i = 0; i < MAX_TCP_LENGTH; i += 2) {
@@ -58,12 +61,16 @@ static inline void ipv4_l4_csum(void *data_start, __u32 data_size,
 		*csum += *buf;
 		buf++;
 	}
-	if ((void *)buf + 1 <= data_end) {
-		*csum += *(__u8 *)buf;
-	}
 
+		if ((void *)(buf + 1) <= data_end) {
+			*csum += *(__u8 *)buf;
+		}
+      
+   
 	*csum = csum_fold_helper(*csum);
+   
 }
+
 
 static int match_rule(struct metainfo *info){
    int result_bit = 0;
@@ -170,25 +177,20 @@ int xdp_filter(struct xdp_md *ctx) {
          if(tcp->dest == bpf_htons(3000)){
             //ip->daddr = bpf_htonl(0xAC110002);
             //tcp->dest = bpf_htons(80);
-            bpf_trace_printk("old:%ld",tcp->check);
+            bpf_trace_printk("old:%x",tcp->check);
             ip->check = 0;
             int csum = 0;
             ipv4_csum(ip, sizeof(struct iphdr), &csum);
             ip->check = csum;
+            
             u64 tcp_csum;
             int tcplen = bpf_ntohs(ip->tot_len) - ip->ihl * 4;
             tcp->check = 0;
             tcp_csum = 0;		
             ipv4_l4_csum((void *)tcp, (__u32)tcplen, &tcp_csum, ip,data_end);
             tcp->check = tcp_csum;
-            bpf_trace_printk("new:%ld",tcp->check);
-            /*
-            // Update tcp checksum
-            int sum = info.daddr + (~bpf_ntohs(*(unsigned short *)&ip->daddr) & 0xffff);
-            sum += bpf_ntohs(tcp->check);
-            sum = (sum & 0xffff) + (sum>>16);
-            tcp->check = bpf_htons(sum + (sum>>16) + 1);
-            */
+            bpf_trace_printk("new:%x",tcp->check);
+            
             return XDP_PASS;
             //int result = bpf_redirect(4,0);
             //bpf_trace_printk("bpf_redir%d",result);
